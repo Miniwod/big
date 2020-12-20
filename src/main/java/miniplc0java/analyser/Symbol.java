@@ -65,6 +65,20 @@ public class Symbol {
         return true;
     }
 
+    public boolean addFunction(Element ta){
+        int i;
+        TempPtr=NowPtr-1;
+        for(i=1;i<=Symbols[TempPtr][0].headernum;i++){
+            if(Symbols[TempPtr][i].elename.equals(ta.elename)){
+                System.out.println("重复声明!");
+                return false;
+            }
+        }
+        Symbols[TempPtr][0].headernum++;
+        Symbols[TempPtr][Symbols[TempPtr][0].headernum]=ta;
+        return true;
+    }
+
     public boolean referElement(String eleName){
         int i,j;
         for(i=NowPtr;i>=0;i--){
@@ -126,6 +140,7 @@ public class Symbol {
 
     public boolean checkReturn(String ele){
         for(int i=1;i<=Symbols[0][0].headernum;i++){
+//            System.out.println(Symbols[0][i].elename);
             if(Symbols[0][i].elename.equals(ele) && Symbols[0][i].type.equals("void")) return true;
         }
         System.out.println("Where is my return?");
