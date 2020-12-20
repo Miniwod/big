@@ -115,6 +115,7 @@ public final class Analyser {
         if (token.getTokenType() == tt) {
             return next();
         } else {
+            System.exit(-1);
             throw new ExpectedTokenError(tt, token);
         }
     }
