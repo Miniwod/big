@@ -123,4 +123,12 @@ public class Symbol {
         System.out.println("No Main Function!");
         return false;
     }
+
+    public boolean checkReturn(String ele){
+        for(int i=1;i<=Symbols[0][0].headernum;i++){
+            if(Symbols[0][i].elename.equals(ele) && Symbols[0][i].type.equals("void")) return true;
+        }
+        System.out.println("Where is my return?");
+        return false;
+    }
 }

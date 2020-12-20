@@ -37,7 +37,7 @@ public class App {
 //            return;
 //        }
 
-        String result="t";
+        String result="a";
         var inputFileName=args[0];
         var outputFileName=args[1];
 //        var inputFileName="in.txt";

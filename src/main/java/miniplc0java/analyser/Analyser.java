@@ -12,6 +12,7 @@ import miniplc0java.tokenizer.TokenType;
 import miniplc0java.tokenizer.Tokenizer;
 import miniplc0java.util.Pos;
 
+import javax.imageio.plugins.tiff.ExifInteroperabilityTagSet;
 import java.awt.image.TileObserver;
 import java.util.*;
 
@@ -24,6 +25,7 @@ public final class Analyser {
     static int nelptr=-1;
     String returnv=null;
     boolean afunc=false;
+    boolean funcre=false;
 
     /** 当前偷看的 token */
     Token peekedToken = null;
@@ -223,23 +225,30 @@ public final class Analyser {
     private void analyseFunction() throws CompileError {
         // 示例函数，示例如何调用子程序
 //        NS.UpLayer();
+        funcre=false;
         afunc=true;
         expect(TokenType.Fn);
         var tk=expect(TokenType.Ident);
         nel[nelptr].elename=tk.getValueString();
         if(!NS.addElement(nel[nelptr])) throw new Error();
-        nelptr--;
-        NS.UpLayer();
 
         expect(TokenType.LParen);
         TokenType tt=peek().getTokenType();
         if(tt==TokenType.Const || tt==TokenType.Ident) analyseFunctionParamList();
         expect(TokenType.RParen);
         expect(TokenType.Arrow);
+
+//        System.out.println("1");
+
         analyseType();
+        nelptr--;
+        NS.UpLayer();
         afunc=false;
         analyseBlockStmt();
 
+        if(!funcre){
+            if(!NS.checkReturn(tk.getValueString())) throw new Error();
+        }
         NS.DownLayer();
         System.out.println(tk.getValueString()+","+NS.NowPtr);
     }
@@ -287,6 +296,7 @@ public final class Analyser {
         expect(TokenType.LBrace);
         TokenType tt=peek().getTokenType();
         while (tt==TokenType.Let || tt==TokenType.Const || tt==TokenType.If || tt==TokenType.While || tt==TokenType.Break || tt==TokenType.Continue || tt==TokenType.Return || tt==TokenType.LBrace || tt==TokenType.Semicolon || tt==TokenType.Minus || tt==TokenType.LParen || tt==TokenType.Ident || tt==TokenType.Uint || tt==TokenType.StringL){
+//            System.out.println("1");
             analyseStmt();
             tt=peek().getTokenType();
         }
@@ -294,10 +304,12 @@ public final class Analyser {
     }
 
     private void analyseStmt() throws CompileError {
+//        System.out.println("1");
         // 示例函数，示例如何调用子程序
         TokenType tt=peek().getTokenType();
         /*两个声明型*/
         if(tt==TokenType.Let){
+//            System.out.println("in");
             nelptr++;
             nel[nelptr]=new Element();
             nel[nelptr].isfunctionname=false;
@@ -393,6 +405,7 @@ public final class Analyser {
                 analyseExpression();
             }
             expect(TokenType.Semicolon);
+            funcre=true;
         }
         else if(tt==TokenType.LBrace){
             NS.UpLayer();
