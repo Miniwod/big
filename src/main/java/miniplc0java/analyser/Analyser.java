@@ -26,6 +26,7 @@ public final class Analyser {
     String returnv=null;
     boolean afunc=false;
     boolean funcre=false;
+    Token now;
 
     /** 当前偷看的 token */
     Token peekedToken = null;
@@ -231,26 +232,26 @@ public final class Analyser {
         expect(TokenType.Fn);
         var tk=expect(TokenType.Ident);
         nel[nelptr].elename=tk.getValueString();
-        if(!NS.addElement(nel[nelptr])) throw new Error();
 
         expect(TokenType.LParen);
         TokenType tt=peek().getTokenType();
+        NS.UpLayer();
         if(tt==TokenType.Const || tt==TokenType.Ident) analyseFunctionParamList();
         expect(TokenType.RParen);
         expect(TokenType.Arrow);
 
-//        System.out.println("1");
 
         analyseType();
+
+        if(!NS.addFunction(nel[nelptr])) throw new Error();
         nelptr--;
-        NS.UpLayer();
         afunc=false;
         analyseBlockStmt();
+        NS.DownLayer();
 
         if(!funcre){
             if(!NS.checkReturn(tk.getValueString())) throw new Error();
         }
-        NS.DownLayer();
         System.out.println(tk.getValueString()+","+NS.NowPtr);
     }
 
@@ -282,6 +283,7 @@ public final class Analyser {
         System.out.println(cp.getValueString()+","+NS.NowPtr);
         analyseType();
         if(!NS.addElement(nel[nelptr])) throw new Error();
+        nelptr--;
     }
 
     private void analyseType() throws CompileError {
@@ -477,6 +479,7 @@ public final class Analyser {
     private void analyseExpression() throws CompileError{
         analyseExpression1();
         if(nextIf(TokenType.Equal)!=null){
+            if(!NS.changeElement(now.getValueString())) throw new Error();
             analyseExpression();
         }
     }
@@ -540,11 +543,11 @@ public final class Analyser {
                 if(tn==TokenType.Minus || tn==TokenType.LParen || tn==TokenType.Ident || tn==TokenType.Uint || tn==TokenType.StringL) {
                     analyseCallParamList();
                 }
-//                System.out.println("fi!");
                 expect(TokenType.RParen);
             }
             else{
                 if(!NS.referElement(tk.getValueString())) throw new Error();
+                now=tk;
             }
         }
         else analyseExpression6();
@@ -560,9 +563,9 @@ public final class Analyser {
 
     private void analyseExpression7() throws CompileError{
         Token tk=next();
-//        System.out.println(tk.getTokenType());
         if(tk.getTokenType()==TokenType.Ident){
             if(!NS.referElement(tk.getValueString())) throw new Error();
+            now=tk;
         }
         else if(tk.getTokenType()==TokenType.Uint){
 
