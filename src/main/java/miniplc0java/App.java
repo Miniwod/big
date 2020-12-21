@@ -37,7 +37,7 @@ public class App {
 //            return;
 //        }
 
-        String result="a";
+        String result="t";
         var inputFileName=args[0];
         var outputFileName=args[1];
 //        var inputFileName="in.txt";
@@ -100,6 +100,7 @@ public class App {
                 return;
             }
             for (Token token : tokens) {
+                System.out.println(token.toString());
                 output.println(token.toString());
             }
 //        } else if (result.getBoolean("analyse")) {
