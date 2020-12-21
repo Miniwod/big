@@ -46,6 +46,7 @@ public class Symbol {
     }
     public void DownLayer(){
         Symbols[NowPtr][0].isavailable=false;
+        bl(NowPtr);
         NowPtr--;
     }
     public boolean addElement(Element ta){
@@ -103,6 +104,19 @@ public class Symbol {
         return true;
     }
 
+    public boolean changeIdent(String eleName,int value){
+        int i,j;
+        for(i=NowPtr;i>=0;i--){
+            for(j=1;j<=Symbols[i][0].headernum;j++){
+                if(Symbols[i][j].elename.equals(eleName) && !Symbols[i][j].isfunctionname && !Symbols[i][j].isconst){
+                    Symbols[i][j].value=value;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public boolean callElement(String eleName){
         int i,j;
         for(i=NowPtr;i>=0;i--){
@@ -138,6 +152,16 @@ public class Symbol {
         return false;
     }
 
+    public int getIdentValue(String eleName){
+        int i,j;
+        for(i=NowPtr;i>=0;i--){
+            for(j=1;j<=Symbols[i][0].headernum;j++){
+                if(Symbols[i][j].elename.equals(eleName) && !Symbols[i][j].isfunctionname) return Symbols[i][j].value;
+            }
+        }
+        return -1;
+    }
+
     public boolean checkReturn(String ele){
         for(int i=1;i<=Symbols[0][0].headernum;i++){
 //            System.out.println(Symbols[0][i].elename);
@@ -145,5 +169,21 @@ public class Symbol {
         }
         System.out.println("Where is my return?");
         return false;
+    }
+
+    public void bl(int layer){
+        for(int i=1;i<=Symbols[layer][0].headernum;i++){
+            if(!Symbols[layer][i].isfunctionname) System.out.println(Symbols[layer][i].elename+"'s value:"+Symbols[layer][i].value);
+        }
+    }
+
+    public String getElementType(String eleName){
+        int i,j;
+        for(i=NowPtr;i>=0;i--){
+            for(j=1;j<=Symbols[i][0].headernum;j++){
+                if(Symbols[i][j].elename.equals(eleName)) return Symbols[i][j].type;
+            }
+        }
+        return "unknown";
     }
 }

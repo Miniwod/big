@@ -27,6 +27,7 @@ public final class Analyser {
     boolean afunc=false;
     boolean funcre=false;
     Token now;
+    Stack sc=Stack.getStack();
 
     /** 当前偷看的 token */
     Token peekedToken = null;
@@ -116,7 +117,7 @@ public final class Analyser {
         if (token.getTokenType() == tt) {
             return next();
         } else {
-            System.exit(-1);
+//            System.exit(-1);
             throw new ExpectedTokenError(tt, token);
         }
     }
@@ -222,6 +223,9 @@ public final class Analyser {
         expect(TokenType.EOF);
         if(!NS.checkMain()) throw new Error();
         NS.DownLayer();
+
+//        sc.bl();
+        System.out.println();
     }
 
     private void analyseFunction() throws CompileError {
@@ -323,13 +327,21 @@ public final class Analyser {
             expect(TokenType.Colon);
             analyseType();
             tt=peek().getTokenType();
+
+            int tmpans;
+
             if(tt==TokenType.Equal){
                 expect(TokenType.Equal);
                 analyseExpression();
+                tmpans=sc.pop().value;
             }
+            else tmpans=0;
+
+
             expect(TokenType.Semicolon);
             System.out.println(tk.getValueString()+","+NS.NowPtr);
             if(!NS.addElement(nel[nelptr])) throw new Error();
+            NS.changeIdent(tk.getValueString(),tmpans);
             nelptr--;
         }
         else if(tt==TokenType.Const){
@@ -344,9 +356,12 @@ public final class Analyser {
             analyseType();
             expect(TokenType.Equal);
             analyseExpression();
+
+            int tmpans=sc.pop().value;
             expect(TokenType.Semicolon);
             System.out.println(tk.getValueString()+","+NS.NowPtr);
             if(!NS.addElement(nel[nelptr])) throw new Error();
+            NS.changeIdent(tk.getValueString(),tmpans);
             nelptr--;
         }
         /*两个声明型*/
@@ -441,94 +456,111 @@ public final class Analyser {
         }
     }
 
-    private void oldanalyseExpression() throws CompileError {
-        // 示例函数，示例如何调用子程序
-//        analyseNoreExpression();
-//        analyseTransitionalExpression();
-        Token tk=peek();
-        TokenType tt=tk.getTokenType();
-        String name=tk.getValueString();
-        if(tt==TokenType.Minus){
-            expect(TokenType.Minus);
-            analyseExpression();
-        }
-        else if(tt==TokenType.LParen){
-            expect(TokenType.LParen);
-            analyseExpression();
-            expect(TokenType.LParen);
-        }
-        else if(tt==TokenType.Ident){
-            Token ele=next();
-            TokenType tn=peek().getTokenType();
-            if(tn==TokenType.LParen){
-                if(!NS.callElement(ele.getValueString())) throw new Error();
-                expect(TokenType.LParen);
-                tn=peek().getTokenType();
-                if(tn==TokenType.Minus || tn==TokenType.LParen || tn==TokenType.Ident || tn==TokenType.Uint || tn==TokenType.StringL) {
-                    analyseCallParamList();
-                }
-                expect(TokenType.RParen);
-            }
-            else {
-                if(!NS.referElement(ele.getValueString())) throw new Error();
-            }
-        }
-        else analyseExpression1();
-    }
-
     private void analyseExpression() throws CompileError{
         analyseExpression1();
-        if(nextIf(TokenType.Equal)!=null){
+        while (nextIf(TokenType.Equal)!=null){
+//            sc.bl();
+//            System.out.println("-");
             if(!NS.changeElement(now.getValueString())) throw new Error();
-            analyseExpression();
+            analyseExpression1();
+
+//            sc.bl();
+            if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+            sc.push("void");
         }
     }
 
     private void analyseExpression1() throws CompileError{
         analyseExpression2();
-        if(nextIf(TokenType.Gt)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Lt)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Ge)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Le)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Eq)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Neq)!=null){
-            analyseExpression();
+        TokenType tk=peek().getTokenType();
+        while(tk==TokenType.Gt || tk==TokenType.Lt || tk==TokenType.Ge || tk==TokenType.Le || tk==TokenType.Eq || tk==TokenType.Neq){
+            if(nextIf(TokenType.Gt)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Lt)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Ge)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Le)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Eq)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Neq)!=null){
+                analyseExpression2();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            tk=peek().getTokenType();
         }
     }
 
     private void analyseExpression2() throws CompileError{
         analyseExpression3();
-        if(nextIf(TokenType.Plus)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Minus)!=null){
-            analyseExpression();
+        TokenType tk=peek().getTokenType();
+        while(tk==TokenType.Plus || tk==TokenType.Minus){
+            if(nextIf(TokenType.Plus)!=null){
+                analyseExpression3();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Minus)!=null){
+                analyseExpression3();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            tk=peek().getTokenType();
         }
     }
 
     private void analyseExpression3() throws CompileError{
         analyseExpression4();
-        if(nextIf(TokenType.Mult)!=null){
-            analyseExpression();
-        }
-        else if(nextIf(TokenType.Div)!=null){
-            analyseExpression();
+        TokenType tk=peek().getTokenType();
+        while(tk==TokenType.Mult || tk==TokenType.Div){
+            if(nextIf(TokenType.Mult)!=null){
+                analyseExpression4();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            else if(nextIf(TokenType.Div)!=null){
+                analyseExpression4();
+
+                if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+                sc.push("int");
+            }
+            tk=peek().getTokenType();
         }
     }
 
     private void analyseExpression4() throws CompileError{
         if(nextIf(TokenType.Minus)!=null){
-            analyseExpression();
+            sc.push("int");
+            analyseExpression4();
+
+            if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+            sc.push("int");
         }
         else analyseExpression5();
     }
@@ -538,6 +570,8 @@ public final class Analyser {
             Token tk=next();
             if(peek().getTokenType()==TokenType.LParen){
                 if(!NS.callElement(tk.getValueString())) throw new Error();
+                sc.push(NS.getElementType(tk.getValueString()));
+
                 expect(TokenType.LParen);
                 TokenType tn=peek().getTokenType();
                 if(tn==TokenType.Minus || tn==TokenType.LParen || tn==TokenType.Ident || tn==TokenType.Uint || tn==TokenType.StringL) {
@@ -547,6 +581,8 @@ public final class Analyser {
             }
             else{
                 if(!NS.referElement(tk.getValueString())) throw new Error();
+
+                sc.push(NS.getElementType(tk.getValueString()));
                 now=tk;
             }
         }
@@ -565,84 +601,36 @@ public final class Analyser {
         Token tk=next();
         if(tk.getTokenType()==TokenType.Ident){
             if(!NS.referElement(tk.getValueString())) throw new Error();
+
+            sc.push(NS.getElementType(tk.getValueString()));
             now=tk;
         }
         else if(tk.getTokenType()==TokenType.Uint){
 
+            int a=Integer.parseInt(tk.getValueString());
+            sc.push("int");
         }
         else if(tk.getTokenType()==TokenType.StringL){
 
+//            sc.push(new StackEle(0,"stringl",tk.getValueString()));
         }
         else throw new Error();
     }
 
-    private void analyseNoreExpression() throws CompileError {
-        // 示例函数，示例如何调用子程序
-        TokenType tt=peek().getTokenType();
-        if(tt==TokenType.Minus){
-            expect(TokenType.Minus);
-            analyseExpression();
-        }
-        else if(tt==TokenType.LParen){
-            expect(TokenType.LParen);
-            analyseExpression();
-            expect(TokenType.RParen);
-        }
-        else if(tt==TokenType.Uint){
-            var tk=expect(TokenType.Uint);
-        }
-        else if(tt==TokenType.StringL){
-            var tk=expect(TokenType.StringL);
-            System.out.println(tk.getValueString()+","+NS.NowPtr);
-        }
-        else if(tt==TokenType.Ident){
-            Token ident=next();
-            if(nextIf(TokenType.Equal)!=null){
-                if(!NS.referElement(ident.getValueString())) throw new Error();
-                if(!NS.changeElement(ident.getValueString())) throw new Error();
-                analyseExpression();
-            }
-            else if(nextIf(TokenType.LParen)!=null){
-                if(!NS.callElement(ident.getValueString())) throw new Error();
-                tt=peek().getTokenType();
-                if(tt==TokenType.Minus || tt==TokenType.LParen || tt==TokenType.Ident || tt==TokenType.Uint || tt==TokenType.StringL) {
-                    analyseCallParamList();
-                }
-                expect(TokenType.RParen);
-            }
-            else if(!NS.referElement(ident.getValueString())) throw new Error();;
-            System.out.println(ident.getValueString()+","+NS.NowPtr);
-        }
-        else throw new AnalyzeError(ErrorCode.ExpectedToken,next().getStartPos());
-    }
-
     private void analyseCallParamList() throws CompileError {
         // 示例函数，示例如何调用子程序
+//        sc.push(new StackEle("Param Start"));
         analyseExpression();
+//        sc.push(new StackEle("Param End"));
         TokenType tt=peek().getTokenType();
         while (tt==TokenType.Comma){
+//            sc.push(new StackEle("Param Start"));
             expect(TokenType.Comma);
             analyseExpression();
             tt=peek().getTokenType();
+//            sc.push(new StackEle("Param End"));
         }
     }
-
-    private void analyseTransitionalExpression() throws CompileError {
-        // 示例函数，示例如何调用子程序
-        TokenType tt=peek().getTokenType();
-        if(tt==TokenType.Plus || tt==TokenType.Minus || tt==TokenType.Mult || tt==TokenType.Div || tt==TokenType.Eq || tt==TokenType.Neq || tt==TokenType.Lt || tt==TokenType.Gt || tt==TokenType.Le || tt==TokenType.Ge){
-            Token op=next();
-            analyseExpression();
-        }
-        else if(tt==TokenType.As){
-            expect(TokenType.As);
-            analyseType();
-        }
-    }
-
-
-
-
 
 
 
