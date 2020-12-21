@@ -41,7 +41,6 @@ public class StringIter {
             return;
         }
         while (scanner.hasNext()) {
-//            System.out.println(scanner.nextLine());
             linesBuffer.add(scanner.nextLine() + '\n');
         }
         // todo:check read \n?
@@ -70,6 +69,11 @@ public class StringIter {
             return new Pos(ptr.row + 1, 0);
         }
         return new Pos(ptr.row, ptr.col + 1);
+    }
+
+    public void nextLine(){
+        ptr.col=(linesBuffer.get(ptr.row).length()-1);
+        nextPos();
     }
 
     /**

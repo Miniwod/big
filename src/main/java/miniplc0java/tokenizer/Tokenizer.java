@@ -37,12 +37,25 @@ public class Tokenizer {
         char peek = it.peekChar();
         if (Character.isDigit(peek)) {
             return lexUInt();
-        } else if (Character.isAlphabetic(peek) || peek=='_') {
+        }
+        else if (Character.isAlphabetic(peek) || peek=='_') {
             return lexIdentOrKeyword();
-        } else if(peek=='"'){
+        }
+        else if(peek=='"'){
             return lexStringOrUnknown();
         }
-        else {
+        else if(peek=='/'){
+            it.nextChar();
+            if(it.peekChar()=='/'){
+                it.nextChar();
+                while(it.nextPos().row==it.currentPos().row){
+                    it.nextChar();
+                }
+                return nextToken();
+            }
+            return new Token(TokenType.Div, '/', it.previousPos(), it.currentPos());
+        }
+        else{
             return lexOperatorOrUnknown();
         }
     }
@@ -81,14 +94,15 @@ public class Tokenizer {
         // Token 的 Value 应填写数字的值
         char c=it.peekChar(),now;
         boolean zy=false;
-        boolean zyd=false;
         String ans="";
         Pos pP=it.currentPos();
+        it.nextChar();
         while(true){
             now=it.nextChar();
+//            System.out.println(now);
             if(now=='\n' || now=='\r' || now=='\t') throw new Error();
             if(zy==true){
-                if(now!='n' && now!='t' && now!='r' && now!='\\' && now!='\"') throw new Error();
+                if(now!='n' && now!='t' && now!='r' && now!='\\' && now!='\"' && now!='\'') throw new Error();
                 else {
                     switch (now){
                         case 'n':{
@@ -127,6 +141,7 @@ public class Tokenizer {
                 else ans+=now;
             }
         }
+//        it.nextChar();
         return new Token(TokenType.StringL,ans,pP,it.currentPos());
     }
 
@@ -194,10 +209,6 @@ public class Tokenizer {
             case '*':
                 // 填入返回语句
                 return new Token(TokenType.Mult, '*', it.previousPos(), it.currentPos());
-
-            case '/':
-                // 填入返回语句
-                return new Token(TokenType.Div, '/', it.previousPos(), it.currentPos());
 
             case '=':{
                 if(sc.equals("==")){
