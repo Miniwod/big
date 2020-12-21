@@ -184,6 +184,14 @@ public class Symbol {
                 if(Symbols[i][j].elename.equals(eleName)) return Symbols[i][j].type;
             }
         }
+        if(eleName.equals("getint")) return "int";
+        else if(eleName.equals("getdouble")) return "double";
+        else if(eleName.equals("getchar")) return "int";
+        else if(eleName.equals("putint")) return "void";
+        else if(eleName.equals("putdouble")) return "void";
+        else if(eleName.equals("putchar")) return "void";
+        else if(eleName.equals("putstr")) return "void";
+        else if(eleName.equals("putln")) return "void";
         return "unknown";
     }
 }

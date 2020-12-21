@@ -117,9 +117,10 @@ public final class Analyser {
         if (token.getTokenType() == tt) {
             return next();
         } else {
-//            System.exit(-1);
-            throw new ExpectedTokenError(tt, token);
+            System.exit(-1);
+//            throw new ExpectedTokenError(tt, token);
         }
+        throw new ExpectedTokenError(tt, token);
     }
 
     /**
@@ -225,7 +226,7 @@ public final class Analyser {
         NS.DownLayer();
 
 //        sc.bl();
-        System.out.println();
+//        System.out.println();
     }
 
     private void analyseFunction() throws CompileError {
