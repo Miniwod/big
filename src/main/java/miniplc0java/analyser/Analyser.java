@@ -5,8 +5,6 @@ import miniplc0java.error.CompileError;
 import miniplc0java.error.ErrorCode;
 import miniplc0java.error.ExpectedTokenError;
 import miniplc0java.error.TokenizeError;
-import miniplc0java.instruction.Instruction;
-import miniplc0java.instruction.Operation;
 import miniplc0java.tokenizer.Token;
 import miniplc0java.tokenizer.TokenType;
 import miniplc0java.tokenizer.Tokenizer;
@@ -26,8 +24,19 @@ public final class Analyser {
     String returnv=null;
     boolean afunc=false;
     boolean funcre=false;
+    boolean assign=false;
     Token now;
     Stack sc=Stack.getStack();
+    public Vm vm=Vm.getVm();
+    boolean global;
+    boolean func;
+    boolean falsetojump;
+    boolean puts;
+    String putst;
+    Instruction[] exprlist=new Instruction[1000];
+    int eln=-1;
+    public Function fstart=new Function(vm.fln,"_start","void");
+
 
     /** 当前偷看的 token */
     Token peekedToken = null;
@@ -199,25 +208,44 @@ public final class Analyser {
         }
     }
 
+    private void retop(Function f){
+        f.addInstruction(new Instruction(InstructionType.globa,1));
+        f.addInstruction(new Instruction(InstructionType.store));
+        f.addInstruction(new Instruction(InstructionType.globa,2));
+        f.addInstruction(new Instruction(InstructionType.store));
+        f.addInstruction(new Instruction(InstructionType.globa,2));
+        f.addInstruction(new Instruction(InstructionType.load));
+        f.addInstruction(new Instruction(InstructionType.globa,1));
+        f.addInstruction(new Instruction(InstructionType.load));
+    }
 
     public static void print(){
         System.out.println("Get you!");
     }
 
     private void analyseProgram() throws CompileError {
+//        vm.addFunction(fstart);
+        vm.fln++;
+        vm.addGlobalVariable(new GlobalVariable(vm.fln,"_start"));
+//        vm.addGlobalVariable(new GlobalVariable(vm.fln,"bhba",-5,false));
+//        vm.addGlobalVariable(new GlobalVariable(vm.fln,"bhbb",0,false));
         // 示例函数，示例如何调用子程序
         NS.UpLayer();
         TokenType tt=peek().getTokenType();
         while (tt==TokenType.Fn || tt==TokenType.Let || tt==TokenType.Const){
             if(tt==TokenType.Fn){
+                func=true;
                 nelptr++;
                 nel[nelptr]=new Element();
                 nel[nelptr].isfunctionname=true;
                 nel[nelptr].isconst=false;
                 analyseFunction();
+                func=false;
             }
             else{
+                global=true;
                 analyseStmt();
+                global=false;
             }
             tt=peek().getTokenType();
         }
@@ -225,8 +253,16 @@ public final class Analyser {
         if(!NS.checkMain()) throw new Error();
         NS.DownLayer();
 
-//        sc.bl();
-//        System.out.println();
+        NS.bls();
+
+        if(vm.getFcType("main").equals("int")){
+//            fstart.addInstruction(new Instruction(InstructionType.stackalloc,1));
+        }
+        int mainid=vm.getFunctionId("main");
+        fstart.addInstruction(new Instruction(InstructionType.call,mainid));
+        fstart.addInstruction(new Instruction(InstructionType.ret));
+        vm.fl[0]=fstart;
+        vm.out();
     }
 
     private void analyseFunction() throws CompileError {
@@ -237,6 +273,11 @@ public final class Analyser {
         expect(TokenType.Fn);
         var tk=expect(TokenType.Ident);
         nel[nelptr].elename=tk.getValueString();
+        vm.addGlobalVariable(new GlobalVariable(vm.gvn,tk.getValueString()));
+
+//        System.out.println(tk.getValueString());
+        vm.addFunction(new Function(vm.getGVId(tk.getValueString()),tk.getValueString(),""));
+
 
         expect(TokenType.LParen);
         TokenType tt=peek().getTokenType();
@@ -247,6 +288,7 @@ public final class Analyser {
 
 
         analyseType();
+        if(vm.topFunction().type.equals("int")) vm.topFunction().imint();
 
         if(!NS.addFunction(nel[nelptr])) throw new Error();
         nelptr--;
@@ -257,7 +299,8 @@ public final class Analyser {
         if(!funcre){
             if(!NS.checkReturn(tk.getValueString())) throw new Error();
         }
-        System.out.println(tk.getValueString()+","+NS.NowPtr);
+//        System.out.println(tk.getValueString()+","+NS.NowPtr);
+        vm.topFunction().addInstruction(new Instruction(InstructionType.ret));
     }
 
     private void analyseFunctionParamList() throws CompileError {
@@ -282,19 +325,33 @@ public final class Analyser {
             expect(TokenType.Const);
         }
         var cp=expect(TokenType.Ident);
+
+//        System.out.println(vm.topFunction().paranum);
+        vm.topFunction().addParam(new LocalVariable(vm.topFunction().paranum,cp.getValueString()));
+
         nel[nelptr].isfunctionname=false;
         nel[nelptr].elename=cp.getValueString();
         expect(TokenType.Colon);
-        System.out.println(cp.getValueString()+","+NS.NowPtr);
+//        System.out.println(cp.getValueString()+","+NS.NowPtr);
         analyseType();
         if(!NS.addElement(nel[nelptr])) throw new Error();
         nelptr--;
+//        vm.topFunction().paranum++;
     }
 
     private void analyseType() throws CompileError {
         // 示例函数，示例如何调用子程序
         var tk=expect(TokenType.Ident);
-        if(tk.getValueString().equals("int") || tk.getValueString().equals("void")) nel[nelptr].type=tk.getValueString();
+        if(tk.getValueString().equals("int") || tk.getValueString().equals("void")){
+            nel[nelptr].type=tk.getValueString();
+            if(afunc){
+                vm.topFunction().type=tk.getValueString();
+                if(tk.getValueString().equals("int")){
+                    vm.topFunction().retnum=1;
+                }
+                else vm.topFunction().retnum=0;
+            }
+        }
         else throw new Error();
         if(afunc) returnv=tk.getValueString();
     }
@@ -312,12 +369,11 @@ public final class Analyser {
     }
 
     private void analyseStmt() throws CompileError {
-//        System.out.println("1");
         // 示例函数，示例如何调用子程序
         TokenType tt=peek().getTokenType();
         /*两个声明型*/
         if(tt==TokenType.Let){
-//            System.out.println("in");
+            int id=0;
             nelptr++;
             nel[nelptr]=new Element();
             nel[nelptr].isfunctionname=false;
@@ -325,27 +381,54 @@ public final class Analyser {
             var tk=expect(TokenType.Ident);
             nel[nelptr].elename=tk.getValueString();
             nel[nelptr].isconst=false;
+
             expect(TokenType.Colon);
             analyseType();
             tt=peek().getTokenType();
 
             int tmpans;
 
+            if(global){
+                vm.addGlobalVariable(new GlobalVariable(vm.gvn,tk.getValueString(),0,false));
+                fstart.addInstruction(new Instruction(InstructionType.globa,vm.getGVId(tk.getValueString())));
+            }
+            else {
+                Function f=vm.topFunction();
+                id=f.localnum;
+                f.addLocalVariable(new LocalVariable(id,tk.getValueString()));
+                f.addInstruction(new Instruction(InstructionType.loca,id));
+            }
+
             if(tt==TokenType.Equal){
+//                assign=true;
                 expect(TokenType.Equal);
                 analyseExpression();
-                tmpans=sc.pop().value;
-            }
-            else tmpans=0;
+                //Push Result In Function
 
+                tmpans=sc.pop().value;
+//                assign=false;
+            }
+            else{
+                tmpans=0;
+                if(global) fstart.addInstruction(new Instruction(InstructionType.push,0));
+                else vm.topFunction().addInstruction(new Instruction(InstructionType.push,0));
+            }
+
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.store));
+            }
+            else {
+                vm.topFunction().addInstruction(new Instruction(InstructionType.store));
+            }
 
             expect(TokenType.Semicolon);
-            System.out.println(tk.getValueString()+","+NS.NowPtr);
-            if(!NS.addElement(nel[nelptr])) throw new Error();
+//            System.out.println(tk.getValueString()+","+NS.NowPtr);
+            if(!NS.addElement(id,nel[nelptr])) throw new Error();
             NS.changeIdent(tk.getValueString(),tmpans);
             nelptr--;
         }
         else if(tt==TokenType.Const){
+            int id=0;
             nelptr++;
             nel[nelptr]=new Element();
             nel[nelptr].isfunctionname=false;
@@ -353,58 +436,114 @@ public final class Analyser {
             var tk=expect(TokenType.Ident);
             nel[nelptr].elename=tk.getValueString();
             nel[nelptr].isconst=true;
+
+            if(global){
+                vm.addGlobalVariable(new GlobalVariable(vm.gvn,tk.getValueString(),0,true));
+                fstart.addInstruction(new Instruction(InstructionType.globa,vm.getGVId(tk.getValueString())));
+            }
+            else {
+                Function f=vm.topFunction();
+                id=f.localnum;
+                f.addLocalVariable(new LocalVariable(id,tk.getValueString()));
+                f.addInstruction(new Instruction(InstructionType.loca,id));
+            }
+
             expect(TokenType.Colon);
             analyseType();
             expect(TokenType.Equal);
+//            assign=true;
             analyseExpression();
+//            assign=false;
+
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.store));
+            }
+            else {
+                vm.topFunction().addInstruction(new Instruction(InstructionType.store));
+            }
 
             int tmpans=sc.pop().value;
             expect(TokenType.Semicolon);
-            System.out.println(tk.getValueString()+","+NS.NowPtr);
-            if(!NS.addElement(nel[nelptr])) throw new Error();
+//            System.out.println(tk.getValueString()+","+NS.NowPtr);
+            if(!NS.addElement(id,nel[nelptr])) throw new Error();
             NS.changeIdent(tk.getValueString(),tmpans);
             nelptr--;
         }
-        /*两个声明型*/
+        /*两个声明型 END*/
+
         else if(tt==TokenType.If){
             NS.UpLayer();
             expect(TokenType.If);
+            int startindex=0;
+            int elseindex=0;
+            int endindex=0;
             if(peek().getTokenType()==TokenType.LParen) expect(TokenType.LParen);
-//            nextIf(TokenType.LParen);
+
             analyseExpression();
-//            nextIf(TokenType.RParen);
+            startindex=vm.topFunction().bodynum;
+            vm.topFunction().addInstruction(new Instruction(falsetojump?InstructionType.brf:InstructionType.brt));
+
+
             if(peek().getTokenType()==TokenType.RParen) expect(TokenType.RParen);
             analyseBlockStmt();
             tt=peek().getTokenType();
-            while(tt==TokenType.Else){
+            if(tt==TokenType.Else){
+                elseindex=vm.topFunction().bodynum;
                 expect(TokenType.Else);
-                if(nextIf(TokenType.If)!=null){
-                    analyseExpression();
-                    analyseBlockStmt();
-                }
-                else {
-                    analyseBlockStmt();
-                    break;
-                }
-                tt=peek().getTokenType();
+//                tt=peek().getTokenType();
+//                if(tt==TokenType.If){
+//                    analyseStmt();
+//                }
+//                else {
+//                    analyseBlockStmt();
+//                }
+                analyseStmt();
+                vm.topFunction().ilist[startindex].withop=true;
+                vm.topFunction().ilist[startindex].opn=elseindex-startindex-1;
             }
-            System.out.println("If Block"+","+NS.NowPtr);
+            else {
+                endindex=vm.topFunction().bodynum;
+                vm.topFunction().ilist[startindex].withop=true;
+                vm.topFunction().ilist[startindex].opn=endindex-startindex-1;
+            }
+//            System.out.println("If Block"+","+NS.NowPtr);
             NS.DownLayer();
         }
         else if(tt==TokenType.While){
             NS.UpLayer();
             expect(TokenType.While);
+
+            int startindex=vm.topFunction().bodynum;
             analyseExpression();
+            int originindex=vm.topFunction().bodynum;
+            vm.topFunction().addInstruction(new Instruction(falsetojump?InstructionType.brf:InstructionType.brt));
             analyseBlockStmt();
-            System.out.println("While Block"+","+NS.NowPtr);
+            int endindex=vm.topFunction().bodynum;
+            for(int i=startindex;i<endindex;i++){
+                if(vm.topFunction().ilist[i].type==InstructionType.breakl && !vm.topFunction().ilist[i].withop){
+                    vm.topFunction().ilist[i].withop=true;
+                    vm.topFunction().ilist[i].opn=endindex-vm.topFunction().ilist[i].index; //In fact,it is endindex+1-(index+1)
+                }
+                if(vm.topFunction().ilist[i].type==InstructionType.continuel && !vm.topFunction().ilist[i].withop){
+                    vm.topFunction().ilist[i].withop=true;
+                    vm.topFunction().ilist[i].opn=startindex-vm.topFunction().ilist[i].index-1;
+                }
+            }
+            vm.topFunction().ilist[originindex].withop=true;
+            vm.topFunction().ilist[originindex].opn=endindex-originindex; //In fact,it is endindex+1-(originindex+1)
+            vm.topFunction().addInstruction(new Instruction(InstructionType.br,startindex-endindex-1));
+
+//            System.out.println("While Block"+","+NS.NowPtr);
             NS.DownLayer();
         }
         else if(tt==TokenType.Break){
             expect(TokenType.Break);
+            vm.topFunction().addInstruction(new Instruction(vm.topFunction().bodynum,InstructionType.breakl));
             expect(TokenType.Semicolon);
         }
         else if(tt==TokenType.Continue){
             expect(TokenType.Continue);
+            vm.topFunction().addInstruction(new Instruction(vm.topFunction().bodynum,InstructionType.continuel));
             expect(TokenType.Semicolon);
         }
         else if(tt==TokenType.Return){
@@ -412,24 +551,27 @@ public final class Analyser {
             tt=peek().getTokenType();
             if(tt==TokenType.Semicolon){
                 if(!returnv.equals("void")){
-                    System.out.println("No return!");
+//                    System.out.println("No return!");
                     throw new Error();
                 }
             }
             else {
                 if(returnv.equals("void")){
-                    System.out.println("Unexpected return!");
+//                    System.out.println("Unexpected return!");
                     throw new Error();
                 }
+                vm.topFunction().addInstruction(new Instruction(InstructionType.arga,0));
                 analyseExpression();
+                vm.topFunction().addInstruction(new Instruction(InstructionType.store));
             }
             expect(TokenType.Semicolon);
             funcre=true;
+            vm.topFunction().addInstruction(new Instruction(InstructionType.ret));
         }
         else if(tt==TokenType.LBrace){
             NS.UpLayer();
             analyseBlockStmt();
-            System.out.println("Code Block"+","+NS.NowPtr);
+//            System.out.println("Code Block"+","+NS.NowPtr);
             NS.DownLayer();
         }
         else if(tt==TokenType.Semicolon){
@@ -460,13 +602,21 @@ public final class Analyser {
     private void analyseExpression() throws CompileError{
         analyseExpression1();
         while (nextIf(TokenType.Equal)!=null){
-//            sc.bl();
-//            System.out.println("-");
             if(!NS.changeElement(now.getValueString())) throw new Error();
             analyseExpression1();
 
-//            sc.bl();
-            if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.store));
+            }
+            else{
+                vm.topFunction().addInstruction(new Instruction(InstructionType.store));
+            }
+
+//            System.out.println(vm.topFunction().name);
+            String a=sc.pop().type;
+            String b=sc.pop().type;
+//            System.out.println(a+" "+b);
+            if(!a.equals(b)) throw new Error();
             sc.push("void");
         }
     }
@@ -478,11 +628,22 @@ public final class Analyser {
             if(nextIf(TokenType.Gt)!=null){
                 analyseExpression2();
 
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                vm.topFunction().addInstruction(new Instruction(InstructionType.setgt));
+                falsetojump=true;
+
+
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
             }
             else if(nextIf(TokenType.Lt)!=null){
                 analyseExpression2();
+
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                vm.topFunction().addInstruction(new Instruction(InstructionType.setlt));
+                falsetojump=true;
 
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
@@ -490,11 +651,21 @@ public final class Analyser {
             else if(nextIf(TokenType.Ge)!=null){
                 analyseExpression2();
 
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                vm.topFunction().addInstruction(new Instruction(InstructionType.setgt));
+                falsetojump=false;
+
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
             }
             else if(nextIf(TokenType.Le)!=null){
                 analyseExpression2();
+
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                vm.topFunction().addInstruction(new Instruction(InstructionType.setlt));
+                falsetojump=false;
 
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
@@ -502,11 +673,19 @@ public final class Analyser {
             else if(nextIf(TokenType.Eq)!=null){
                 analyseExpression2();
 
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                falsetojump=false;
+
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
             }
             else if(nextIf(TokenType.Neq)!=null){
                 analyseExpression2();
+
+//                retop(vm.topFunction());
+                vm.topFunction().addInstruction(new Instruction(InstructionType.cmp));
+                falsetojump=true;
 
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
@@ -522,11 +701,29 @@ public final class Analyser {
             if(nextIf(TokenType.Plus)!=null){
                 analyseExpression3();
 
+                if(global){
+//                    retop(fstart);
+                    fstart.addInstruction(new Instruction(InstructionType.add));
+                }
+                else{
+//                    retop(vm.topFunction());
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.add));
+                }
+
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
             }
             else if(nextIf(TokenType.Minus)!=null){
                 analyseExpression3();
+
+                if(global){
+//                    retop(fstart);
+                    fstart.addInstruction(new Instruction(InstructionType.sub));
+                }
+                else{
+//                    retop(vm.topFunction());
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.sub));
+                }
 
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
@@ -542,11 +739,29 @@ public final class Analyser {
             if(nextIf(TokenType.Mult)!=null){
                 analyseExpression4();
 
+                if(global){
+//                    retop(fstart);
+                    fstart.addInstruction(new Instruction(InstructionType.mul));
+                }
+                else {
+//                    retop(vm.topFunction());
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.mul));
+                }
+
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
             }
             else if(nextIf(TokenType.Div)!=null){
                 analyseExpression4();
+
+                if(global){
+//                    retop(fstart);
+                    fstart.addInstruction(new Instruction(InstructionType.div));
+                }
+                else {
+//                    retop(vm.topFunction());
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.div));
+                }
 
                 if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
                 sc.push("int");
@@ -559,7 +774,12 @@ public final class Analyser {
         if(nextIf(TokenType.Minus)!=null){
             sc.push("int");
             analyseExpression4();
-
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.neg));
+            }
+            else {
+                vm.topFunction().addInstruction(new Instruction(InstructionType.neg));
+            }
             if(!sc.pop().type.equals(sc.pop().type)) throw new Error();
             sc.push("int");
         }
@@ -570,20 +790,83 @@ public final class Analyser {
         if(peek().getTokenType()==TokenType.Ident){
             Token tk=next();
             if(peek().getTokenType()==TokenType.LParen){
-                if(!NS.callElement(tk.getValueString())) throw new Error();
-                sc.push(NS.getElementType(tk.getValueString()));
-
                 expect(TokenType.LParen);
-                TokenType tn=peek().getTokenType();
-                if(tn==TokenType.Minus || tn==TokenType.LParen || tn==TokenType.Ident || tn==TokenType.Uint || tn==TokenType.StringL) {
+                if(tk.getValueString().equals("putstr")){
+//                    expect(TokenType.LParen);
+                    puts=true;
                     analyseCallParamList();
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.prints,vm.getGVId(putst)));
+//                    expect(TokenType.RParen);
+                    puts=false;
+                }
+                else if(tk.getValueString().equals("putint")){
+                    analyseCallParamList();
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.print));
+                }
+                else if(tk.getValueString().equals("putln")){
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.println));
+                }
+                else if(tk.getValueString().equals("getint")){
+                    sc.push("int");
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.scan));
+                }
+                else if(tk.getValueString().equals("putchar")){
+//                    System.out.println("ha");
+                    analyseCallParamList();
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.putc));
+//                    System.out.println("ha");
+                }
+                else {
+                    if(!NS.callElement(tk.getValueString())) throw new Error();
+                    sc.push(NS.getElementType(tk.getValueString()));
+
+                    if(vm.getFcType(tk.getValueString()).equals("int")){
+                        vm.topFunction().addInstruction(new Instruction(InstructionType.stackalloc,1));
+                    }
+
+//                    expect(TokenType.LParen);
+                    TokenType tn=peek().getTokenType();
+                    if(tn==TokenType.Minus || tn==TokenType.LParen || tn==TokenType.Ident || tn==TokenType.Uint || tn==TokenType.StringL) {
+                        analyseCallParamList();
+                    }
+
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.call,vm.getFunctionId(tk.getValueString())));
+
                 }
                 expect(TokenType.RParen);
             }
             else{
+                falsetojump=true;
                 if(!NS.referElement(tk.getValueString())) throw new Error();
-
+//                System.out.println(NS.getElementType(tk.getValueString())+" "+tk.getValueString());
                 sc.push(NS.getElementType(tk.getValueString()));
+
+                if(global){
+                    fstart.addInstruction(new Instruction(InstructionType.globa,vm.getGVId(tk.getValueString())));
+                    if(peek().getTokenType()!=TokenType.Equal) fstart.addInstruction(new Instruction(InstructionType.load));
+                }
+                else {
+                    int id;
+                    boolean globals=NS.checkGlobal(tk.getValueString());
+                    if(globals){
+                        id=vm.getGVId(tk.getValueString());
+                        vm.topFunction().addInstruction(new Instruction(InstructionType.globa,id));
+                        if(peek().getTokenType()!=TokenType.Equal) vm.topFunction().addInstruction(new Instruction(InstructionType.load));
+                    }
+                    else{
+                        id=NS.getlvId(tk.getValueString());
+                        if(id==-1){
+                            id=vm.topFunction().getParamId(tk.getValueString());
+                            vm.topFunction().addInstruction(new Instruction(InstructionType.arga,id));
+                        }
+                        else {
+                            vm.topFunction().addInstruction(new Instruction(InstructionType.loca,id));
+                        }
+//                        System.out.println(assign);
+                        if(peek().getTokenType()!=TokenType.Equal) vm.topFunction().addInstruction(new Instruction(InstructionType.load));
+                    }
+                }
+
                 now=tk;
             }
         }
@@ -602,294 +885,71 @@ public final class Analyser {
         Token tk=next();
         if(tk.getTokenType()==TokenType.Ident){
             if(!NS.referElement(tk.getValueString())) throw new Error();
-
             sc.push(NS.getElementType(tk.getValueString()));
+
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.globa,vm.getGVId(tk.getValueString())));
+                if(peek().getTokenType()!=TokenType.Equal) fstart.addInstruction(new Instruction(InstructionType.load));
+            }
+            else {
+                int id;
+                boolean globals=NS.checkGlobal(tk.getValueString());
+                if(globals){
+                    id=vm.getGVId(tk.getValueString());
+                    vm.topFunction().addInstruction(new Instruction(InstructionType.globa,id));
+                    if(peek().getTokenType()!=TokenType.Equal) vm.topFunction().addInstruction(new Instruction(InstructionType.load));
+                }
+                else{
+                    id=NS.getlvId(tk.getValueString());
+                    if(id==-1){
+                        id=vm.topFunction().getParamId(tk.getValueString());
+                        vm.topFunction().addInstruction(new Instruction(InstructionType.arga,id));
+                    }
+                    else {
+                        vm.topFunction().addInstruction(new Instruction(InstructionType.loca,id));
+                    }
+//                    System.out.println(assign);
+                    if(peek().getTokenType()!=TokenType.Equal) vm.topFunction().addInstruction(new Instruction(InstructionType.load));
+                }
+            }
+
+            falsetojump=true;
             now=tk;
         }
         else if(tk.getTokenType()==TokenType.Uint){
 
             int a=Integer.parseInt(tk.getValueString());
+
+            falsetojump=a!=0;
+
             sc.push("int");
+            if(global){
+                fstart.addInstruction(new Instruction(InstructionType.push,a));
+            }
+            else{
+                vm.topFunction().addInstruction(new Instruction(InstructionType.push,a));
+            }
         }
         else if(tk.getTokenType()==TokenType.StringL){
+            NS.addStringL(tk.getValueString());
 
-//            sc.push(new StackEle(0,"stringl",tk.getValueString()));
+            vm.addGlobalVariable(new GlobalVariable(vm.gvn,tk.getValueString()));
+//            vm.topFunction().addInstruction(new Instruction(InstructionType.globa,vm.getGVId(tk.getValueString())));
+            if(puts) putst=tk.getValueString();
         }
         else throw new Error();
     }
 
     private void analyseCallParamList() throws CompileError {
         // 示例函数，示例如何调用子程序
-//        sc.push(new StackEle("Param Start"));
         analyseExpression();
-//        sc.push(new StackEle("Param End"));
         TokenType tt=peek().getTokenType();
         while (tt==TokenType.Comma){
-//            sc.push(new StackEle("Param Start"));
             expect(TokenType.Comma);
             analyseExpression();
             tt=peek().getTokenType();
-//            sc.push(new StackEle("Param End"));
         }
     }
 
 
-
-//    private void analyseMain() throws CompileError {
-//        // 主过程 -> 常量声明 变量声明 语句序列
-//        analyseConstantDeclaration();
-//        analyseVariableDeclaration();
-//        analyseStatementSequence();
-//        //throw new Error("Not implemented");
-//    }
-//
-//    private void analyseConstantDeclaration() throws CompileError {
-//        // 示例函数，示例如何解析常量声明
-//        // 常量声明 -> 常量声明语句*
-//
-//        // 如果下一个 token 是 const 就继续
-//        while (nextIf(TokenType.Const) != null) {
-//            // 常量声明语句 -> 'const' 变量名 '=' 常表达式 ';'
-//
-//            // 变量名
-//            var nameToken = expect(TokenType.Ident);
-//            // 加入符号表
-//            String name = (String) nameToken.getValue();
-//            addSymbol(name, true, true, nameToken.getStartPos());
-//
-//            // 等于号
-//            expect(TokenType.Equal);
-//
-//            // 常表达式
-//            var value = analyseConstantExpression();
-//            // 分号
-//            expect(TokenType.Semicolon);
-//
-//            // 这里把常量值直接放进栈里，位置和符号表记录的一样。
-//            // 更高级的程序还可以把常量的值记录下来，遇到相应的变量直接替换成这个常数值，
-//            // 我们这里就先不这么干了。
-//            instructions.add(new Instruction(Operation.LIT, value));
-//        }
-//    }
-//
-//    private void analyseVariableDeclaration() throws CompileError {
-//        // 变量声明 -> 变量声明语句*
-//
-//        // 如果下一个 token 是 var 就继续
-//        while (nextIf(TokenType.Var) != null) {
-//            // 变量声明语句 -> 'var' 变量名 ('=' 表达式)? ';'
-//
-//            // 变量名
-//            var nameToken=expect(TokenType.Ident);
-//            // 变量初始化了吗
-//            //int it;
-//            boolean initialized = false;
-//            if(nextIf(TokenType.Equal)!=null){
-//                analyseExpression();
-//                initialized=true;
-//            }
-//
-//            // 下个 token 是等于号吗？如果是的话分析初始化
-//
-//            // 分析初始化的表达式
-//
-//            // 分号
-//            expect(TokenType.Semicolon);
-//
-//            // 加入符号表，请填写名字和当前位置（报错用）
-//            String name = /* 名字 */(String) nameToken.getValue();
-//            addSymbol(name, initialized, false, /* 当前位置 */ nameToken.getStartPos());
-//
-//            // 如果没有初始化的话在栈里推入一个初始值
-//            if (!initialized) {
-//                instructions.add(new Instruction(Operation.LIT, 0));
-//            }
-//        }
-//    }
-//
-//    private void analyseStatementSequence() throws CompileError {
-//        // 语句序列 -> 语句*
-//        // 语句 -> 赋值语句 | 输出语句 | 空语句
-//
-//        while (true) {
-//            // 如果下一个 token 是……
-//            var peeked = peek();
-//            if (peeked.getTokenType() == TokenType.Ident) {
-//                // 调用相应的分析函数
-//                analyseAssignmentStatement();
-//                // 如果遇到其他非终结符的 FIRST 集呢？
-//            }else if(peeked.getTokenType()==TokenType.Print){
-//                analyseOutputStatement();
-//            }
-//            else {
-//                // 都不是，摸了
-//                break;
-//            }
-//        }
-//        //throw new Error("Not implemented");
-//    }
-//
-//    private int analyseConstantExpression() throws CompileError {
-//        // 常表达式 -> 符号? 无符号整数
-//        boolean negative = false;
-//        if (nextIf(TokenType.Plus) != null) {
-//            negative = false;
-//        } else if (nextIf(TokenType.Minus) != null) {
-//            negative = true;
-//        }
-//
-//        var token = expect(TokenType.Uint);
-//        int value = Integer.parseInt((String) token.getValue());
-//        if (negative) {
-//            value = -value;
-//        }
-//
-//        return value;
-//    }
-//
-//    private void analyseExpression() throws CompileError {
-//        // 表达式 -> 项 (加法运算符 项)*
-//        // 项
-//        analyseItem();
-//
-//        while (true) {
-//            // 预读可能是运算符的 token
-//            var op = peek();
-//            if (op.getTokenType() != TokenType.Plus && op.getTokenType() != TokenType.Minus) {
-//                break;
-//            }
-//
-//            // 运算符
-//            next();
-//
-//            // 项
-//            analyseItem();
-//
-//            // 生成代码
-//            if (op.getTokenType() == TokenType.Plus) {
-//                instructions.add(new Instruction(Operation.ADD));
-//            } else if (op.getTokenType() == TokenType.Minus) {
-//                instructions.add(new Instruction(Operation.SUB));
-//            }
-//        }
-//    }
-//
-//    private void analyseAssignmentStatement() throws CompileError {
-//        // 赋值语句 -> 标识符 '=' 表达式 ';'
-//
-//        // 分析这个语句
-//
-//        // 标识符是什么？
-//        var nameToken=expect(TokenType.Ident);
-//        String name = (String) nameToken.getValue();
-//        var symbol = symbolTable.get(name);
-//        if (symbol == null) {
-//            // 没有这个标识符
-//            throw new AnalyzeError(ErrorCode.NotDeclared, /* 当前位置 */ nameToken.getStartPos());
-//        } else if (symbol.isConstant) {
-//            // 标识符是常量
-//            throw new AnalyzeError(ErrorCode.AssignToConstant, /* 当前位置 */ nameToken.getStartPos());
-//        }
-//        // 设置符号已初始化
-//        initializeSymbol(name, nameToken.getStartPos());
-//        expect(TokenType.Equal);
-//        analyseExpression();
-//        expect(TokenType.Semicolon);
-//        // 把结果保存
-//        var offset = getOffset(name, nameToken.getStartPos());
-//        instructions.add(new Instruction(Operation.STO, offset));
-//    }
-//
-//    private void analyseOutputStatement() throws CompileError {
-//        // 输出语句 -> 'print' '(' 表达式 ')' ';'
-//        expect(TokenType.Print);
-////        next();
-//        expect(TokenType.LParen);
-////        next();
-//
-//        analyseExpression();
-//
-//        expect(TokenType.RParen);
-////        next();
-//        expect(TokenType.Semicolon);
-////        next();
-//
-//        instructions.add(new Instruction(Operation.WRT));
-//    }
-//
-//    private void analyseItem() throws CompileError {
-//        // 项 -> 因子 (乘法运算符 因子)*
-//
-//        // 因子
-//        analyseFactor();
-//
-//        while (true) {
-//            // 预读可能是运算符的 token
-//            Token op = peek();
-//
-//            // 运算符
-//            if(op.getTokenType()!=TokenType.Mult && op.getTokenType()!=TokenType.Div) break;
-//            next();
-//            // 因子
-//            analyseFactor();
-//            // 生成代码
-//            if (op.getTokenType() == TokenType.Mult) {
-//                instructions.add(new Instruction(Operation.MUL));
-//            } else if (op.getTokenType() == TokenType.Div) {
-//                instructions.add(new Instruction(Operation.DIV));
-//            }
-//        }
-//    }
-//
-//    private void analyseFactor() throws CompileError {
-//        // 因子 -> 符号? (标识符 | 无符号整数 | '(' 表达式 ')')
-//
-//        boolean negate;
-//        if (nextIf(TokenType.Minus) != null) {
-//            negate = true;
-//            // 计算结果需要被 0 减
-//            instructions.add(new Instruction(Operation.LIT, 0));
-//        } else {
-//            nextIf(TokenType.Plus);
-//            negate = false;
-//        }
-//
-//        if (check(TokenType.Ident)) {
-//            // 是标识符
-//
-//            // 加载标识符的值
-//            var nameToken=expect(TokenType.Ident);
-//            String name = /* 快填 */ (String) nameToken.getValue();
-//            var symbol = symbolTable.get(name);
-//            if (symbol == null) {
-//                // 没有这个标识符
-//                throw new AnalyzeError(ErrorCode.NotDeclared, /* 当前位置 */ nameToken.getStartPos());
-//            } else if (!symbol.isInitialized) {
-//                // 标识符没初始化
-//                throw new AnalyzeError(ErrorCode.NotInitialized, /* 当前位置 */ nameToken.getStartPos());
-//            }
-//            var offset = getOffset(name, nameToken.getStartPos());
-//            instructions.add(new Instruction(Operation.LOD, offset));
-//        } else if (check(TokenType.Uint)) {
-//            // 是整数
-//            // 加载整数值
-//            int value = 0;
-//            value=analyseConstantExpression();
-//            instructions.add(new Instruction(Operation.LIT, value));
-//        } else if (check(TokenType.LParen)) {
-//            // 是表达式
-//            // 调用相应的处理函数
-//            next();
-//            analyseExpression();
-//            expect(TokenType.RParen);
-//        } else {
-//            // 都不是，摸了
-//            throw new ExpectedTokenError(List.of(TokenType.Ident, TokenType.Uint, TokenType.LParen), next());
-//        }
-//
-//        if (negate) {
-//            instructions.add(new Instruction(Operation.SUB));
-//        }
-////        throw new Error("Not implemented");
-//    }
 }

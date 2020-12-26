@@ -12,18 +12,18 @@ import java.util.Scanner;
 
 import miniplc0java.analyser.Analyser;
 import miniplc0java.error.CompileError;
-import miniplc0java.instruction.Instruction;
+//import miniplc0java.instruction.Instruction;
 import miniplc0java.tokenizer.StringIter;
 import miniplc0java.tokenizer.Token;
 import miniplc0java.tokenizer.TokenType;
 import miniplc0java.tokenizer.Tokenizer;
 
-import net.sourceforge.argparse4j.*;
-import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.ArgumentAction;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
+//import net.sourceforge.argparse4j.*;
+//import net.sourceforge.argparse4j.impl.Arguments;
+//import net.sourceforge.argparse4j.inf.ArgumentAction;
+//import net.sourceforge.argparse4j.inf.ArgumentParser;
+//import net.sourceforge.argparse4j.inf.ArgumentParserException;
+//import net.sourceforge.argparse4j.inf.Namespace;
 
 public class App {
     public static void main(String[] args) throws CompileError {
@@ -38,10 +38,10 @@ public class App {
 //        }
 
         String result="a";
-        var inputFileName=args[0];
-        var outputFileName=args[1];
-//        var inputFileName="in.txt";
-//        var outputFileName="out.txt";
+//        var inputFileName=args[0];
+//        var outputFileName=args[1];
+        var inputFileName="in.txt";
+        var outputFileName="out.txt";
 
         InputStream input;
         if (inputFileName.equals("-")) {
@@ -82,8 +82,6 @@ public class App {
         var tokenizer = tokenize(iter);
 
         if (result.equals("t")) {
-//        if (result.getBoolean("analyse")) {
-            // tokenize
             var tokens = new ArrayList<Token>();
             try {
                 while (true) {
@@ -103,38 +101,18 @@ public class App {
 //                System.out.println(token.toString());
                 output.println(token.toString());
             }
-//        } else if (result.getBoolean("analyse")) {
-        } else if (result.equals("a")) {
+        }
+        else if (result.equals("a")) {
             // analyze
             var analyzer = new Analyser(tokenizer);
-            List<Instruction> instructions;
-            try {
-                instructions = analyzer.analyse();
-            } catch (Exception e) {
-                // 遇到错误不输出，直接退出
-                System.err.println(e);
-                System.exit(0);
-                return;
-            }
-            for (Instruction instruction : instructions) {
-                output.println(instruction.toString());
-            }
-        } else {
+            analyzer.analyse();
+            analyzer.vm.eout(output);
+        }
+        else {
             System.err.println("Please specify either '--analyse' or '--tokenize'.");
             System.exit(3);
         }
     }
-
-//    private static ArgumentParser buildArgparse() {
-//        var builder = ArgumentParsers.newFor("miniplc0-java");
-//        var parser = builder.build();
-//        parser.addArgument("-t", "--tokenize").help("Tokenize the input").action(Arguments.storeTrue());
-//        parser.addArgument("-l", "--analyse").help("Analyze the input").action(Arguments.storeTrue());
-//        parser.addArgument("-o", "--output").help("Set the output file").required(true).dest("output")
-//                .action(Arguments.store());
-//        parser.addArgument("file").required(true).dest("input").action(Arguments.store()).help("Input file");
-//        return parser;
-//    }
 
     private static Tokenizer tokenize(StringIter iter) {
         var tokenizer = new Tokenizer(iter);
